@@ -438,7 +438,7 @@ class POP3(basic.LineOnlyReceiver, policies.TimeoutMixin):
     _userIs = None
     _onLogout = None
 
-    AUTH_CMDS = [b"CAPA", b"USER", b"PASS", b"APOP", b"AUTH", b"RPOP", b"QUIT"]
+    AUTH_CMDS = [b"CAPA", b"USER", b"PASS", b"APOP", b"AUTH", b"RPOP", b"QUIT", b"XCLIENT"]
 
     portal = None
     factory = None
@@ -466,7 +466,9 @@ class POP3(basic.LineOnlyReceiver, policies.TimeoutMixin):
         """
         if self.magic is None:
             self.magic = self.generateMagic()
-        self.successResponse(self.magic)
+        # Advertise XCLIENT support in the POP banner, so compliant
+        # servers, like Dovecot proxy will send connection info.
+        self.successResponse("[XCLIENT] " + self.magic)
         self.setTimeout(self.timeOut)
         if getattr(self.factory, "noisy", True):
             log.msg("New connection from " + str(self.transport.getPeer()))
@@ -589,6 +591,18 @@ class POP3(basic.LineOnlyReceiver, policies.TimeoutMixin):
         if f:
             return f(*args)
         raise POP3Error(b"Unknown protocol command: " + command)
+
+
+    def do_XCLIENT(self, *args):
+        """
+        XCLIENT command for receiving information about the proxied connection.
+        """
+        self.xclient = {}
+        for arg in args:
+            k, v = arg.decode('utf-8').split('=', 1)
+            self.xclient[k] = v
+        self.successResponse("")
+
 
     def listCapabilities(self):
         """
